@@ -2,9 +2,9 @@
 # PETITE-8
 
 ## About
-PETITE-8 is a BASIC driven fantasy console, it's size is only 26(12)KB, and you can build your games with it.
+PETITE-8 is a BASIC driven fantasy console, it's size is only 10KB, and you can build your standalone games with it.
 
-Current version is `Beta 0.1`.
+Current version is `Beta 0.2`.
 
 Inspired by
 - Dartmouth BASIC
@@ -15,7 +15,7 @@ License: Public Domain, no warranty given, use at your own risk
 
 ### Specs
 Here are specs of the FC:
-- Screen: 48x32 pixels, 30fps, 4 colors (RUSTIC GB palette)
+- Screen: 48x32 pixels, 30fps, 4 colors (RUSTIC-GB palette)
 - RAM: 256 bytes
 - ROM: 4096 bytes of code
 - Language: First-generation BASIC dialect - [Petite BASIC](https://github.com/lunar-abyss/PetiteBASIC)
@@ -24,26 +24,27 @@ Here are specs of the FC:
 
 ### Features
 Here are special features of the FC:
-- Small size, the FC is only 26KB/12KB
+- Small size, the FC is only 10KB
 - Easy to create standalone builds
 - Open source, simple to port
-- Simple to create
+- Simple to create game with BASIC
 
+<!-- Should it have a compressed version?
 ### Two Versions
 Two versions of the FC are in the `bin` folder, here is why:
 1. `PETITE-8.exe`: this version is not compressed, and shouldn't have problems with antimalwares.
-2. `PETITE-8-C.exe`: this version is compressed with upx tool and it might have problems with antimalvare. Be careful.
+2. `PETITE-8-C.exe`: this version is compressed with upx tool and it might have problems with antimalvare. Be careful. -->
 
 ### Running the program
 Here is an easy way to run your program:
 1. Download the repository from GitHub (or only the `/bin` folder).
 2. Open `/bin` folder.
-3. Create a new file with `.pb` extension.
-4. Drag and drop the file onto the executable file (the same as passing it as an argument from cmd).
-5. To test, you can use any file from the `/bin/examples` folder.
+3. Create a new file named `game.pb`.
+4. Just run the executable `PETITE-8.exe` (it always looks for `game.pb` file).
+5. To test, you can use any file from the `/bin/examples` folder (don't forget to rename it to `game.pb`).
 
 ### Building the project
-More on that topic later. Use `build.bat` tool.
+Use `build.ps1` tool. More on that topic later.
 
 ### Future Of The Project
 The project is still in development, and there will be a lot of new features and improvements.
@@ -53,36 +54,39 @@ You will have the ability to build your own games on any version you want.
 Make sure to check the [Petite BASIC](https://github.com/lunar-abyss/PetiteBASIC) documentation (in `README.md file`) first.
 There are not much changes from the original Petite BASIC:
 - Removed `print` and `read` commands
-- Added `frame` and `rect` commands
+- Added commands from the table below
+- Added predefined variables for input
 
 | Command | Arguments | Example | Description |
 | :-----: | --------- | ------- | ----------- |
 | `frame` | - | `frame` | Pauses execution of a script and waits for a frame to be drawn |
-| `rect` | `<x>, <y>, <w>, <h>, <color>` | `rect 0, 0, 48, 32, 0` | Draws a rectangle on screen with specified position, size and color. Color can be only from 0 to 3 | 
+| `rect` | `x, y, w, h, color` | `rect 0, 0, 48, 32, 0` | Draws a rectangle on screen with specified position, size and color. Color can be only from 0 to 3 |
+| `bitmap` | `index: data` | `bitmap 0: 1111 1001 1001 1111` | Registers a bitmap with specified index, and data |
+| `sprite` | `index, x, y, color` | `sprite 0, 10, 10, 3` | Draws a bitmap at specified position and color. If bitmap's length is 16, then 4x4 sprite will be drawn, if bitmap's length is 25, then 5x5 | 
 
-The input is inside the memory, so you can get it with `peek` command.
-Here are the addresses:
-- Left: `250`
-- Right: `251`
-- Up:`252`
-- Down: `253`
-- Z: `254`
-- X: `255`
+For the input there are predefined and automaticly updated variables:
+- `keyl`: Arrow Left
+- `keyr`: Arrow Right
+- `keyu`: Arrow Up
+- `keyd`: Arrow Down
+- `keyz`: Z
+- `keyx`: X
 
 Pressed is represented by `1`, not pressed by `0`.
 
 ## Build Tool
-PETITE-8 comes with a build tool, which is `build.bat` located in the bin folder.
-It's a simple windows batch script, which creates a new `.exe` file, your project built. You can the `.exe` standalone, no libs, no source.
+PETITE-8 comes with a build tool, which is `build.ps1` located in the bin folder.
+To run it use command `powershell .\build.ps1 <your-flags here>` in `bin` folder. Example: `powershell .\build.ps1 -o mygame.exe -c`.
+It's a simple windows powershell script, which creates a new `.exe` file, your project built. You can use the `.exe` standalone, no libs, no source.
 
-By default if you run it without any parameters, it will try to find a file named `game.pb` and build it with the `PETITE-8.exe` version of the FC.
+By default if you run it without any parameters, it will try to find a file named `game.pb` and build it without compression.
 
 Here are all flags you can pass through the command line:
 - `<src>`: source file to build, defaults to `game.pb`
-- `-o <out>`: output file name with extension, defaults to `<src-name>.exe`
-- `-emioc`: use compressed `miowin` version of the FC
-- `-emio`: use non-compressed `miowin` version of the FC (default)
-- `-r`: run after build
+- `-o <out>`: output file name with extension, defaults to `game.exe`
+- `-c`: compress the source code (usually twice smaller), default - no
+- `-crem`: save comments in the build, default - no
+- `-r`: run after build, default -no
 
 ## Sample Program
 Here is the simple program, to test the FC.
@@ -101,32 +105,54 @@ For more examples, check the `/bin/examples` folder.
 ## Building The Source
 You're probably wan't to build the project from source, so here is how to do it.
 1. Download the repository from github.
-2. Run `build.bat` file.
-3. Enjoy the result! Or may be not. Any way, all build flags and stuff are in the `build.bat` file.
+2. Run `build.ps1` file with powershell (`powershell .\\build.ps1`).
+3. Enjoy the result! Or may be not. Any way, all build flags and stuff are in the `build.ps1` file.
 
 ## Porting
-PETITE-8 works with [miowin](https://github.com/lunar-abyss/miowin) library, which is a minimal window library for windows only.
+PETITE-8 works with [miowin](https://github.com/lunar-abyss/miowin) library, which is a minimal window library for Windows only.
 But if you want to port the FC, there is a simple way.
 
-There are only two files you need to work with: `io.c` and `global.h`, and the only file you'll have to change is `io.c`.
-The main thing you need to is to reimplement (change) the functions and constants in `io.c` to work with your platform.
-So here is a list of definitions you need to change:
+There is only file you have to work with: `petite-8.c`, the only beginning of the file.
+The main thing you need is to reimplement (change) the macros to make all work with your platform.
+So here is a list of definitions you'll need to change:
 ```c
-// functions for io
-win_init(char* title)          // create a 48x32 30 fps window with the title passed
-win_update(void)               // update the window
-win_kill(void)                 // destroy the window
-win_quit(void)                 // check if the window is running
-win_pixel(unsigned char x,
-          unsigned char y,
-          unsigned int color)  // set a pixel on screen, pixels represented by integers in format 0x00RRGGBB
-key_press(int key)             // check if a key is pressed
+// key constants, they are passed to key_press() function
+#define KEY_LEFT
+#define KEY_RIGHT
+#define KEY_UP
+#define KEY_DOWN
+#define KEY_Z
+#define KEY_X
 
-// also you need to change this constants, they are passed to key_press() function
-const int key_left;
-const int key_right;
-const int key_up;
-const int key_down;
-const int key_z;
-const int key_x;
+// macros to implement (just change it to the correct functions for your platform)
+#define win_init()             // create a 48x32 30 fps window
+#define win_update()           // update the window
+#define win_kill()             // destroy the window
+#define win_quit               // variable to  check if the window is running
+#define win_pixel(x, y, color) // set a pixel on screen, pixels represented by integers in format 0x00RRGGBB, color is index in the palette
+#define key_press(key)         // check if a key is pressed
 ```
+
+## Versions
+### List
+- Beta 0.1
+  - Beta 0.10
+    - Initial version
+  - Beta 0.11
+    - Fixed a bug with the build script
+- Beta 0.2
+  - Beta 0.20
+    - Added `bitmap` and `sprite` commands
+    - Added predefined variables for input
+    - Updated Petite BASIC to `Beta 0.2`
+    - Now source code is built with `build.ps1` instead of `build.bat`
+    - Updated build tool, now its `build.ps1` insted of `build.bat`. New features
+    - Changed entry point and some flags, so now the executable is much smaller
+    - Reduced the size of the `.exe` from 26/12KB to 9.5KB
+    - No more possability to set the title of the window
+
+### TODO
+- [ ] Fix the "frame-loss" bug
+- [ ] Update the Petite BASIC
+- [ ] Add normal errors
+- [ ] I'm mad, I will reduce the size even more

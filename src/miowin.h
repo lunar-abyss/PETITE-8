@@ -147,9 +147,6 @@ void mio_die(void)
 
   // free buffer
   free(mio_pixels);
-
-  // exiting
-  exit(0);
 }
 
 

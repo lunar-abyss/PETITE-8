@@ -4,7 +4,7 @@
         MOD:     Modded for the PETITE-8
         AUTHOR:  Lunaryss, 2025
         LICENSE: Public Domain, no warranty given, use at your own risk
-        VERSION: Beta 0.11
+        VERSION: Beta 0.2
 \******************************************************************************/
 
 
@@ -14,10 +14,12 @@
 #define PETITE_BASIC_H
 
 // constants
-#define PB_VAR_NAME_LEN 10
-#define PB_MEMORY_SIZE  256
-#define PB_VARS_COUNT   64
-#define PB_CODE_LEN     4096
+#define PB_VAR_NAME_LEN  10
+#define PB_MEMORY_SIZE   256
+#define PB_VARS_COUNT    64
+#define PB_CODE_LEN      4096
+#define PB_STACK_SIZE    8
+#define PB_BITMAPS_COUNT 16
 
 // petite basic value
 typedef
@@ -39,15 +41,17 @@ typedef struct {
 } pb_cmd;
 
 // variables
-extern pb_value  pb_mem[PB_MEMORY_SIZE];
-extern pb_var    pb_vars[PB_VARS_COUNT];
+extern pb_value* pb_mem;
+extern pb_var*   pb_vars;
 extern pb_cmd    pb_cmds[];
-extern char      pb_code[PB_CODE_LEN];
+extern char*     pb_code;
 extern char      pb_pause;
 
 // functions
 void     pb_init();
+void     pb_prep();
 void     pb_exec();
+void     pb_kill();
 void     pb_line(char* line, char len);
 pb_value pb_expr(char* expr, char len);
 void     pb_goto(char* label, char len);
@@ -59,6 +63,26 @@ void     pb_set(char* name, char len, pb_value value);
 
 
 
+///////////////////////////// PETITE-BASIC-LOCAL.H /////////////////////////////
+#if defined PETITE_BASIC_C || defined PETITE_BASIC_COMMANDS_C
+
+// importing count of commands
+extern const int pb_cmds_count;
+
+// initializing vars
+extern int   pb_mem_ptr;
+extern char* pb_ptr;
+extern char* pb_call_stack[PB_STACK_SIZE];
+extern char  pb_call_ptr;
+
+// data list
+unsigned char* pb_bitmaps;
+
+// PETITE_BASIC_LOCAL_H
+#endif
+
+
+
 /////////////////////////// PETITE-BASIC-COMMANDS.H ////////////////////////////
 #ifdef PETITE_BASIC_COMMANDS_C
 
@@ -66,29 +90,43 @@ void     pb_set(char* name, char len, pb_value value);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "global.h"
+#include <math.h>
+
+// to the form
+#define pb_cmd_goto pb_goto
+
+// utility to parse arguments
+void pb_parse_args(char* args, char len, pb_value* out, char count);
 
 // all statements
 void pb_cmd_if(char*, char);
 void pb_cmd_rem(char*, char);
 void pb_cmd_let(char*, char);
-void pb_cmd_goto(char*, char);
+void pb_cmd_call(char*, char);
+void pb_cmd_return(char*, char);
 void pb_cmd_peek(char*, char);
 void pb_cmd_poke(char*, char);
-void pb_cmd_rect(char*, char);
+
+// modded
 void pb_cmd_rect(char*, char);
 void pb_cmd_frame(char*, char);
+void pb_cmd_bitmap(char*, char);
+void pb_cmd_sprite(char*, char);
 
 // list with all the statements
 pb_cmd pb_cmds[] = {
-  { "if",    &pb_cmd_if },
-  { "rem",   &pb_cmd_rem },
-  { "let",   &pb_cmd_let },
-  { "goto",  &pb_cmd_goto },
-  { "peek",  &pb_cmd_peek },
-  { "poke",  &pb_cmd_poke },
-  { "rect",  &pb_cmd_rect },
-  { "frame", &pb_cmd_frame }
+  { "if",     &pb_cmd_if },
+  { "rem",    &pb_cmd_rem },
+  { "let",    &pb_cmd_let },
+  { "goto",   &pb_cmd_goto },
+  { "call",   &pb_cmd_call },
+  { "return", &pb_cmd_return },
+  { "peek",   &pb_cmd_peek },
+  { "poke",   &pb_cmd_poke },
+  { "rect",   &pb_cmd_rect },
+  { "frame",  &pb_cmd_frame },
+  { "bitmap", &pb_cmd_bitmap },
+  { "sprite", &pb_cmd_sprite },
 };
 
 // setting the size of the pb_cmds
@@ -124,11 +162,6 @@ void pb_cmd_let(char* args, char len) {
   pb_set(args, sep, pb_expr(args + sep + 1, len - sep - 1));
 }
 
-// going to some label
-void pb_cmd_goto(char* args, char len) {
-  pb_goto(args, len);
-}
-
 // getting a value from memory
 void pb_cmd_peek(char* args, char len) {
   char sep = strchr(args, ',') - args;
@@ -142,6 +175,17 @@ void pb_cmd_poke(char* args, char len) {
   pb_mem[pb_expr(args + sep + 1, len - sep - 1)] = pb_expr(args, sep);
 }
 
+// calling a label
+void pb_cmd_call(char* args, char len) {
+  pb_call_stack[pb_call_ptr++] = strchr(pb_ptr, '\n') + 1;
+  pb_goto(args, len);
+}
+
+// returning from a function
+void pb_cmd_return(char* args, char len) {
+  pb_ptr = pb_call_stack[--pb_call_ptr] - 1;
+}
+
 // drawing a frame
 void pb_cmd_frame(char* args, char len) {
   pb_pause = 1;
@@ -150,26 +194,65 @@ void pb_cmd_frame(char* args, char len) {
 // filling a rectangle
 void pb_cmd_rect(char* args, char len)
 {  
-  // getting all the arguments
-  char* strs[6] = {0};
-  strs[0] = args;
-  strs[5] = args + len + 1;
-
-  // getting the arguments
-  for (int i = 0; i < 4; i++)
-    strs[i + 1] = strchr(strs[i], ',') + 1;
-
   // arguments
-  pb_value arg[5] = {0};
-
-  // calculating the arguments
-  for (int i = 0; i < 5; i++)
-    arg[i] = pb_expr(strs[i], strs[i + 1] - strs[i] - 1);
+  pb_value list[5];
+  pb_parse_args(args, len, list, 5);
 
   // drawing the rectangle
-  for (int x = arg[0]; x < arg[2] + arg[0]; x++)
-    for (int y = arg[1]; y < arg[3] + arg[1]; y++)
-      win_pixel(x, y, palette[arg[4]]);
+  for (int x = list[0]; x < list[2] + list[0]; x++)
+    for (int y = list[1]; y < list[3] + list[1]; y++)
+      win_pixel(x, y, list[4]);
+}
+
+// loading a bitmap
+void pb_cmd_bitmap(char* args, char len)
+{
+  // getting the arguments
+  char sep = strchr(args, ':') - args;
+  pb_value datano = pb_expr(args, sep);
+  char length = 0;
+  
+  // reading the data
+  for (int i = sep + 1; i < len; i++)
+    if (args[i] == '1' || args[i] == '0')
+      pb_bitmaps[datano * 26 + ++length] = args[i];
+
+  // setting the len to the data
+  pb_bitmaps[datano * 26] = length;
+}
+
+// drawing a sprite
+void pb_cmd_sprite(char* args, char len)
+{
+  // arguments
+  pb_value list[4];
+  pb_parse_args(args, len, list, 4);
+
+  // getting the width of the bitmap
+  char size = pb_bitmaps[list[0] * 26] == 25 ? 5 : 4;
+
+  // drawing the sprite
+  for (int x = list[1]; x < list[1] + size; x++)
+    for (int y = list[2]; y < list[2] + size; y++)
+      if (pb_bitmaps[list[0] * 26 + x - list[1] + (y - list[2]) * size + 1] == '1') 
+        win_pixel(x, y, list[3]);
+}
+
+// utility to parse arguments
+void pb_parse_args(char* args, char len, pb_value* out, char count)
+{
+  // getting all the arguments
+  char* strs[9] = {0};
+  strs[0] = args;
+  strs[count] = args + len + 1;
+
+  // getting the arguments
+  for (int i = 0; i < count - 1; i++)
+    strs[i + 1] = strchr(strs[i], ',') + 1;
+
+  // calculating the arguments
+  for (int i = 0; i < count; i++)
+    out[i] = pb_expr(strs[i], strs[i + 1] - strs[i] - 1);
 }
 
 // petite_basic_commands_h
@@ -194,16 +277,15 @@ enum {
   PB_PRIO_LIT,
 };
 
-// importing count of commands
-extern const int pb_cmds_count;
-
 // initializing vars
-pb_value pb_mem[PB_MEMORY_SIZE];
-int      pb_mem_ptr = 0;
-pb_var   pb_vars[PB_VARS_COUNT];
-char     pb_code[PB_CODE_LEN];
-char*    pb_ptr = 0;
-char     pb_pause = 0;
+pb_value* pb_mem;
+int       pb_mem_ptr = 0;
+pb_var*   pb_vars;
+char*     pb_code;
+char*     pb_ptr = 0;
+char      pb_pause = 0;
+char*     pb_call_stack[PB_STACK_SIZE] = {0};
+char      pb_call_ptr = 0;
 
 // trimming a string
 char* pb_trim(char* str, char* len) {
@@ -242,20 +324,28 @@ void pb_set(char* name, char len, pb_value value)
     if (strncmp(name, pb_vars[i].name, len) == 0)
       var = i;
   
-    // new variable, allocating and naming
-    if (var == pb_mem_ptr) {
-      strncpy(pb_vars[var].name, name, len);
-      pb_vars[var].addr = pb_mem_ptr;
-      pb_mem_ptr++;
-    }
+  // new variable, allocating and naming
+  if (var == pb_mem_ptr) {
+    memcpy(pb_vars[var].name, name, len);
+    pb_vars[var].addr = pb_mem_ptr;
+    pb_mem_ptr++;
+  }
 
-    // setting the value
-    pb_mem[pb_vars[var].addr] = value;
+  // setting the value
+  pb_mem[pb_vars[var].addr] = value;
 }
 
 // going to the label
-void pb_goto(char* label, char len) {
+void pb_goto(char* label, char len)
+{
+  // trimming the label
   label = pb_trim(label, &len);
+
+  // if label is $
+  if (label[0] == '$' && len == 1)
+    return;
+
+  // actually going to the label
   for (int i = 0; i < PB_CODE_LEN - len - 1; i++) 
     if (pb_code[i + len] == ':' && strncmp(pb_code + i, label, len) == 0)
       pb_ptr = i + pb_code - 1;
@@ -288,11 +378,10 @@ pb_value pb_expr(char* expr, char len)
 
     // grouping and function calls
     else if (expr[i] == '(' && prio >= PB_PRIO_GRP)
-    {
-      // setting the values
       oper = i, prio = PB_PRIO_GRP;
 
-      // skipping the parenthesis
+    // skipping the parenthesis
+    if (expr[i] == '(') {
       char nesting = 1;
       while (nesting > 0)
         if (expr[++i] == '(')
@@ -333,12 +422,8 @@ pb_value pb_expr(char* expr, char len)
   }
 
   // operator is grouping
-  else
-  {
-    // it is grouping
-    if (oper == 0)
-      return pb_expr(expr + 1, len - 2);
-  }
+  else if (oper == 0)
+    return pb_expr(expr + 1, len - 2);
 }
 
 // interpreting a line
@@ -377,7 +462,15 @@ void pb_line(char* line, char len)
 }
 
 // initializing the interpreter
-void pb_init()
+void pb_init() {
+  pb_mem  = malloc(PB_MEMORY_SIZE);
+  pb_code = malloc(PB_CODE_LEN);
+  pb_vars = malloc(PB_VARS_COUNT * sizeof(pb_var));
+  pb_bitmaps = malloc(PB_BITMAPS_COUNT * 26);
+}
+
+// parsing the code
+void pb_prep()
 {
   // setting the pointer
   pb_ptr = pb_code;
@@ -403,6 +496,14 @@ void pb_exec()
       line = ++pb_ptr;
     else
       pb_ptr++;
+}
+
+// killing the interpreter
+void pb_kill() {
+  free(pb_mem);
+  free(pb_code);
+  free(pb_vars);
+  free(pb_bitmaps);
 }
 
 // petite_basic_c
